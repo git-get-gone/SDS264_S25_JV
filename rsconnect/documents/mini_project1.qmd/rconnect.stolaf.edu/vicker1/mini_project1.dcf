@@ -1,0 +1,12 @@
+name: mini_project1
+title: mini_project1
+username: vicker1
+account: vicker1
+server: rconnect.stolaf.edu
+hostUrl: https://rconnect.stolaf.edu/__api__
+appId: 846
+bundleId: 2244
+url: https://rconnect.stolaf.edu/content/5ce79768-9ee6-4f1b-a3df-b1f9ca79c302/
+version: 1
+asMultiple: FALSE
+asStatic: TRUE

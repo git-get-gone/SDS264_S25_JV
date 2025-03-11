@@ -1,0 +1,220 @@
+---
+title: "R Tip of the Day"
+subtitle: "The ggvis package"
+author: "Jordan Vickers"
+date: "March 4, 2025"
+format:
+  revealjs: 
+    slide-number: true
+    chalkboard: 
+      buttons: true
+    preview-links: auto
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+library(tidyverse)
+library(gapminder)
+library(gganimate)
+library(ggridges)
+library(ggvis)
+
+vaccine_data <- read_csv("https://joeroith.github.io/264_spring_2025/Data/vaccinations_2021.csv")
+
+```
+
+##  {auto-animate="true"}
+
+::: {style="margin-top: 100px;"}
+ggplot? ❌
+:::
+
+##  {auto-animate="true"}
+
+::: {style="margin-top: 200px; font-size: 2.5em; color: gold;"}
+An intro to ggvis ✅
+:::
+
+## New functionality to old functions {auto-animate="true"}
+
+ggvis is a package that adds more functionality to ggplot by adding interactivity to your graph and layers
+
+```{r}
+vaccine_data %>% 
+ggvis(~perc_Biden, ~perc_complete_vac, size:= input_slider(1,100)) %>% 
+  layer_points() %>%
+  add_axis("x", title = "Percent of Biden Votes") %>%
+  add_axis("y", title = "Percenet Vaccinated")
+```
+
+## Compare to ggplot {auto-animate="true"}
+
+ggPlot
+
+``` {.r code-line-numbers="2-7"}
+vaccine_data |>
+  ggplot(aes(x = total_distributed, y = people_vaccinated) +
+  geom_point(alpha = 0.7)
+  labs(
+    x = "Total Population",
+    y = "Percent Vaccinated"
+  )
+```
+
+ggvis
+
+``` {.r code-line-numbers="2-4"}
+vaccine_data %>% 
+ggvis(~total_distributed, ~people_vaccinated, size:= input_slider(1,100)) %>% 
+  layer_points() %>%
+  add_axis("x", title = "Total Population") %>%
+  add_axis("y", title = "Percent Vaccinated")
+  
+```
+
+
+
+## It's all still here (and more)!
+
+-   You get all the functionality of ggplot but with added freedom to easily change your output
+
+``` {.r code-line-numbers="1-2|3|4|5-7|6-7|9-10|11"}
+vaccine_data %>%
+  ggvis(~perc_Biden, ~perc_complete_vac, fill = ~region) %>%
+  layer_points(opacity := 0.5) %>%
+  add_axis("x", subdivide = 9, title = "Percent of Biden Voters", tick_size_major = 10, tick_size_minor = 5, 
+           properties = axis_props(
+           grid = list(stroke = "magenta"),
+           labels = list(angle = 45, align = "left", fontSize = 15)
+           )) %>%
+  add_axis("x", offset = 30, grid = FALSE)
+  add_axis("y", title = "Percent of Complete Vaccination") %>%
+  add_legend("fill")
+```
+
+## Resulting graph
+
+![](ggvis_example.jpg){.r-stretch}
+
+
+## Groupings
+
+```{r}
+#| echo: true
+vaccine_data %>%
+  head(100)%>%
+  ggvis(~perc_Biden, ~perc_complete_vac) %>%
+  layer_points() %>%
+  #group_by(region) %>%
+  auto_group() %>%
+  layer_paths()
+```
+
+## Groupings Part 2
+
+```{r}
+#| echo: true
+vaccine_data %>% 
+  head(100) %>%
+  dplyr::filter(region == "South" | region == "Midwest") %>% 
+  dplyr::mutate(region = factor(region)) %>% 
+  ggvis(~perc_Biden, ~perc_complete_vac, stroke = ~region) %>% 
+  layer_lines()
+```
+
+
+## Interactivity
+
+-   To make our graphs more fun, we can make the user interact with it through sliders and drop downs
+
+```{r}
+vaccine_data %>% 
+ggvis(~perc_Biden, ~perc_complete_vac) %>% 
+  layer_model_predictions(
+    model = input_select(
+          c("loess" = "loess",
+          "Linear" = "lm"))
+    ) %>%
+  layer_points(size := input_slider(1, 200, value = 100)) %>%
+  add_axis("x", title = "Total Population") %>%
+  add_axis("y", title = "Percenet Vaccinated")
+```
+
+
+## Similarly we augment how the function maps {auto-animate="true"}
+
+```{r}
+vaccine_data %>% 
+ggvis(~perc_Biden, ~perc_complete_vac) %>% 
+  layer_smooths(span= input_slider(0, 1))%>%
+  layer_points(size := input_slider(1, 200, value = 100)) %>%
+  add_axis("x", title = "Total Population") %>%
+  add_axis("y", title = "Percenet Vaccinated")
+```
+
+## Final use is binwidths {auto-animate="true"}
+
+```{r}
+bin_slider <- input_slider(min = 5, max = 50, value = 10, label = "Number of Bins")
+
+# Define a reactive data transformation
+vaccine_data %>%
+  ggvis(~perc_complete_vac) %>%
+  layer_histograms(width = bin_slider) 
+```
+
+## Limitations
+
+::: {.fragment .highlight-red}
+-   "Interactive inputs can only modify the data, not the underlying plot specification. In other words, with only basic interactivity there’s no way to add or remove layers, or switch between different datasets."
+:::
+
+``` {.r code-line-numbers="2-4"}
+vaccine_data %>% 
+ggvis(~perc_Biden, ~perc_complete_vac, fill:= input_select(
+                                      c("region" = ~factor(region),
+                                     "Metro-Status" = ~factor(metro_status)))) %>% 
+  layer_model_predictions() %>%
+  layer_points(size := input_slider(1, 200, value = 100)) %>%
+  add_axis("x", title = "Total Population") %>%
+  add_axis("y", title = "Percenet Vaccinated")
+```
+
+![](wagging.jpg){.absolute .fragment bottom="110" right="130" width="300"}
+
+
+## Shiny Implementation
+
+-   However you can interact directly with Shiny app which has added functionality and more control
+
+``` {.r code-line-numbers="7" } 
+vaccine_data %>%  
+ggvis(~perc_Biden, ~perc_complete_vac) %>%   
+layer_smooths(span= input_slider(0, 1))%>%   l
+ayer_points(size := input_slider(1,200, value = 100)) %>%   
+add_axis("x", title = "Total Population") %>%   
+add_axis("y", title = "Percenet Vaccinated") %>%   bind_shiny("ggvis", "ggvis_ui")
+```
+
+## Overview
+
+-   Provides interactivity for a user to see different options and adjust their view of the data to their liking
+-   Provides a good way to see the fit of different parameters for the scientist
+-   Pretty limited in functionality, would opt for a more robust packages like plotly or shiny app
+
+# References and Resources:
+
+- [Interactive Graphs - jtr13](https://jtr13.github.io/cc21fall1/interactive-graphs-tutorial.html) 
+- [ggvis cookbook](https://ggvis.rstudio.com/cookbook.html) 
+- [‘Data Visualization in R with ggvis’ from DataCamp](https://rpubs.com/jacobdickey_2016/223060)
+- [ggplot2ggvis](https://jimhester.github.io/ggplot2ToGgvis/)
+
+## Thank you for your time
+
+```{r}
+t <- seq(0, 2 * pi, length = 100)
+df <- data.frame(x = sqrt(2)*sin(t)**3, y = -cos(t)**3 - cos(t)**2 + 2 * cos(t))
+df %>% ggvis(~x, ~y) %>% layer_paths(fill := "red")
+  
+```

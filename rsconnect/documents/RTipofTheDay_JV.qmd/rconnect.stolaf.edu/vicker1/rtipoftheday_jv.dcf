@@ -1,0 +1,14 @@
+name: rtipoftheday_jv
+title: RTipofTheDay_JV
+username: vicker1
+account: vicker1
+server: rconnect.stolaf.edu
+hostUrl: https://rconnect.stolaf.edu/__api__
+appId: 857
+bundleId: 2270
+url: https://rconnect.stolaf.edu/content/59b1efd2-d4d1-4326-b5f6-9abea50633d5/
+version: 1
+quarto_version: 1.5.57
+quarto_engines: knitr
+asMultiple: FALSE
+asStatic: FALSE
