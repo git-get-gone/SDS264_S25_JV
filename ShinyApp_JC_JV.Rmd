@@ -1,0 +1,426 @@
+---
+title: "Conference Level Dashboard"
+output: flexdashboard::flex_dashboard
+runtime: shiny
+theme: spacelab
+author: "Jean-Luc Collete, Jordan Vickers"
+---
+
+```{r global, include=FALSE}
+#Conference Libraries
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(stringr)
+library(rvest)
+library(polite)
+library(sf)
+library(maps)
+library(viridis)
+library(leaflet)
+library(htmltools)
+
+library(httr2)
+library(httr)
+
+library(janitor)
+library(colorspace)
+library(RColorBrewer)
+library(gt)
+
+library(flexdashboard)
+library(DT)
+```
+
+```{r include = FALSE, echo =FALSE}
+#School Libraries
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(stringr)
+library(rvest)
+library(polite)
+library(sf)
+library(maps)
+library(viridis)
+library(leaflet)
+library(htmltools)
+library(stringr)
+library(janitor)
+library(knitr)
+library(flexdashboard)
+library(devtools)
+library(fmsb)
+library(ECharts2Shiny)
+library(ggradar)
+library(palmerpenguins)
+library(scales)
+library(purrr)
+```
+
+
+
+
+```{r, echo = FALSE, include=FALSE}
+# function for a given year conference statistics
+basketball_scrape_c <- function(year) {
+  
+  url <- str_c("https://www.sports-reference.com/cbb/seasons/men/", year, ".html")
+  robotstxt::paths_allowed(url) # test to ensure it is fine to scrape
+  
+  nih <- read_html(url)
+  
+  title_temp <- html_nodes(nih, css = "table")
+  
+  Basketball_table <- html_table(title_temp, header = TRUE, fill = TRUE)[[1]] # selecting the table we want
+  Basketball_table <- Basketball_table |>
+  mutate(year = year) # adding year as a column
+  
+Basketball_table
+
+}
+
+# Function for multiple years in data
+
+conference_years <- function(year_list) {
+  
+ conference_data_list <- purrr::map(year_list, ~ basketball_scrape_c(year = .x) %>% mutate(year = .x))
+ 
+conference_stats_all_years <- list_rbind(conference_data_list)
+
+conference_stats_all_years
+
+}
+
+
+years <- c("2018") # testing the code for multiple years
+test4 <- conference_years(years) # testing the new function
+```
+
+
+```{r echo=FALSE, include=FALSE}
+#Main function to create list
+basketball_stats <- function(year_list) {
+  
+ basketball_stats_data_list <- purrr::map(year_list, ~ basketball_scrape(year = .x) %>% mutate(year = .x))
+ 
+basketball_stats_all_years <- list_rbind(basketball_stats_data_list)
+
+return(basketball_stats_all_years)
+
+}
+
+
+#Smaller function to grab data 
+basketball_scrape <- function(year) {
+  
+  session <- bow(str_c("https://www.sports-reference.com/cbb/seasons/", year,"-advanced-school-stats.html"), force = TRUE)
+  
+page<-scrape(session)
+title_temp <- html_nodes(page, css = "table")
+
+Basketball_table <- html_table(title_temp, header = T, fill = T)[[1]] %>% row_to_names(row_number = 1) %>% 
+  clean_names() %>%
+  select(-c(starts_with("na"))) %>%
+  select(1:16)
+
+return(Basketball_table)
+
+}
+
+ # test the scraping algorithm for a single 
+
+years<- as.character(c(2023:2025)) #if you scrape too much the website will block you so I have reduced this value
+
+final_tibble <- basketball_stats(years)
+final_tibble <-  final_tibble %>% mutate(across(3:17, as.numeric))
+```
+
+
+
+About
+==========================
+
+Column {data-width = 200}
+-------------------------
+
+**Background Information**
+
+![](https://upload.wikimedia.org/wikipedia/commons/thumb/2/28/March_Madness_logo.svg/1200px-March_Madness_logo.svg.png){width=45%}
+
+
+For our project, we will use data from the Sports Reference website. March Madness refers to the annual NCAA college basketball tournament, which typically happens in March. With “March Madness” being a popular event that attracts the excitement of sports fans and can potentially line the pockets of many gamblers, it serves as an interesting exercise to analyze the performance of the different teams that participate. We are compiling a dataset of both the conference performance and individual school performance. 
+
+
+In order to do this, we used the rvest and polite package in order to scrape the contents of the site and build our dataset. Before scraping however, we verified using the paths_allowed function to check the robots.txt which gave permission for scraping. We created functions in order to scrape the site over multiple years in order to gain a broader understanding of how performance has changed over time. Our analysis may provide insights into what teams may be standout picks based on previous performance and may highlight strengths and weaknesses that lie in a team alongside variables that affect their performance. We could also analyse what conferences have historically been the best and what that may mean with many conferences changing in recent years.
+
+
+The sites we will use are between individual school performance and conference performance. We have already built functions that can retrieve data from any year or multiple years that college basketball has reported data.
+
+
+
+Link to [Individual School Data](https://www.sports-reference.com/cbb/seasons/men/1993-advanced-school-stats.html).
+
+Link to [Conference Level Data](https://www.sports-reference.com/cbb/seasons/men/2024.html).
+
+
+
+**Variables**
+
+For individual schools, we have:
+
+Games, Wins, Losses, W-L%, Simple rating score, Strength of schedule, Conference wins, Conference losses, Home Wins and Losses, Away Wins and Losses, Team points, Opposition points, Pace factor, Offensive rating, Free throw attempt rate, 3-point attempt rate, True shooting %, Total rebound %, Assist %, Steal %, Block %, Effective FG%, Turnover %, Offensive rebound %, Free throws per free throw attempt.
+
+For conference level, we have:
+
+Schools in conference, Wins, Losses, W-L%, Simple rating score, Strength of Schedule, Number of schools ranked in the final AP rankings, number of NCAA tournament appearances, Number of Final four appearances, regular season champions (in conference), Tournament Champion (in conference)
+
+**Useful Terms**
+Strength of Schedule - how difficult a team's schedule is based on the strength of its opponents
+Simple Ranking System - A scale that takes into account a myriad of factors in order to rank a team
+
+
+
+Conference Level
+=============================
+
+Inputs {.sidebar}
+-------------------------
+```{r setup, include=FALSE, message=FALSE}
+library(AER)
+library(tidyverse)
+
+conference_years <- function(year_list) {
+  
+ conference_data_list <- purrr::map(year_list, ~ basketball_scrape_c(year = .x) %>% mutate(year = .x))
+ 
+conference_stats_all_years <- list_rbind(conference_data_list)
+
+conference_stats_all_years |>
+  select(Conference, Schls, W, L, `W-L%`, SRS, SOS, AP, NCAA, FF)
+}
+
+conference_years2 <- function(year_list) {
+  
+ conference_data_list2 <- purrr::map(year_list, ~ basketball_scrape_c(year = .x) %>% mutate(year = .x))
+ 
+conference_stats_all_years2 <- list_rbind(conference_data_list2)
+
+conference_stats_all_years2 |>
+  select(Rk, Conference, Schls, W, L, `W-L%`, SRS, SOS, AP, NCAA, FF, `Regular Season Champ`, `Tournament Champ`)
+
+}
+
+  
+
+```
+
+
+```{r, echo=FALSE}
+inputPanel(
+  selectInput("x", label = "x-axis variable:",
+    choices = c("Number of Schools" = "Schls",
+                "Strength of Schedule" = "SOS",
+               "Simple Rating System" = "SRS")),
+  selectInput("year", label = "Year:",
+              choices = c(2025:1970), selected = 2025),
+  checkboxInput("NCAAcheck","Color by NCAA?",value=FALSE),
+  
+   selectInput("Tournament", label = "Championship Style",
+    choices = c("Regular Season" = "Regular Season Champ", "Tournament" = "Tournament Champ"))
+  
+  )
+
+```
+
+Column {data-width = 200}
+-------------------------
+
+```{r echo=FALSE}
+renderPlot({
+  year = input$year
+if (!input$NCAAcheck) 
+ggplot(conference_years(year), aes(x = .data[[input$x]], y = `W-L%`)) +
+    geom_point(size = 5, color = "lightblue") +
+    geom_smooth(method = lm, se = FALSE) +
+    theme_minimal()
+else if (input$NCAAcheck)
+  ggplot(conference_years(year), aes(x = .data[[input$x]], y = `W-L%`)) +
+    geom_point(aes(color = NCAA), size = 5) +
+    geom_smooth(method = lm, se = FALSE) +
+    scale_color_viridis_b() +
+    theme_minimal()
+})
+
+```
+**Commentary**: In this graph you can change between Number of Schools, Strength of Schedule, and Simple Rating System by conference. 
+
+Strength of Schedule is a rating showing how competitive a divisions average opposition is, with positive numbers meaning harder opponents and negative values meaning easier opponents. 
+
+Simple Rating System adds average point differential to Strength of Schedule to get a more complete view of which conferences as a whole are better than others. 
+
+
+Column {data-width = 200}
+-------------------------
+
+```{r echo=FALSE}
+renderPlot({
+year <- input$year
+
+conference_heat <- conference_years(year) |>
+  select(Schls, W, L, `W-L%`, SRS, SOS, AP, NCAA, FF)
+
+conference_heat2 <- as.matrix(conference_heat)
+
+colMain <- colorRampPalette(brewer.pal(8, "Blues"))(25)
+
+heatmap(conference_heat2, Colv = NA, Rowv = NA, scale="column", col=colMain)
+  
+})
+
+
+```
+**Commentary**: Here is a heatmap showing statistics by division rank going from bottom to top. Darker Colors indicate higher values while lighter values indicate lower values. Clicking around shows that better divisions tend to have more AP and NCAA appearances, but the Final Four is a bit more random, showing that March Madness doesn't solely rely on top conferences
+
+**Table**: Below is a table showing the top 5 conferences in the year you select with the champion. Conferences have (at least) two different yearly champions, one from the Regular Season and another from the Tournament following the regular season. 
+
+```{r, echo=FALSE}
+conference_years2 <- function(year_list) {
+  
+ conference_data_list2 <- purrr::map(year_list, ~ basketball_scrape_c(year = .x) %>% mutate(year = .x))
+ 
+conference_stats_all_years2 <- list_rbind(conference_data_list2)
+
+conference_stats_all_years2 |>
+  select(Rk, Conference, Schls, W, L, `W-L%`, SRS, SOS, AP, NCAA, FF, `Regular Season Champ`, `Tournament Champ`)
+}
+
+```
+
+
+```{r echo=FALSE}
+renderTable({
+  year = input$year
+if 
+  (input$Tournament == "Regular Season Champ")
+conference_years2(year) |>
+  select(Conference, `Regular Season Champ`) |>
+    head(5) 
+
+else if (!input$Tournament == "Regular Season Champ")
+conference_years2(year) |>
+  select(Conference, `Tournament Champ`) |>
+    head(5) |>
+    gt()
+})
+
+```
+
+
+School Correlations with Win-Loss %
+======================================
+
+
+```{r, echo=FALSE}
+
+choices_list <- c("Total Team Points" = "tm",
+                "Total Opposition Points" = "opp",
+                "Win Loss Percent" = "w_l_percent",
+                "Number of Wins" = "w",
+                "Number of Losses" = "l",
+                "Simple Rating System" = "srs",
+                "Stength of Schedule" = "sos")
+
+inputPanel(
+  selectInput("team", "Select a Team:",
+            choices = final_tibble$school,  
+            selected = final_tibble$school[1]),
+  selectInput("x", label = "X-Values",
+    choices = choices_list),
+   selectInput("y", label = "Y-Values",
+    choices = choices_list)
+  # selectizeInput("school",  label = "Teams", choices = sort(unique(final_tibble$school)), selected = unique(final_tibble$school)[1], multiple = FALSE, options = list(create = TRUE))
+  )
+```
+
+Column 
+-------------------------
+
+### Graph showing how different relationships affect W-L% percent
+
+```{r echo = FALSE}
+renderPlot({
+  
+  ggplot(final_tibble, aes(x = .data[[input$x]], y = .data[[input$y]])) +
+    geom_point(aes(color = w_l_percent), size = 3) +
+    geom_point(data = final_tibble %>% filter(school == input$team),
+               aes(x = .data[[input$x]], y = .data[[input$y]]),
+               color = "red", size = 5, shape = 12) +
+    scale_color_viridis_c() +
+    theme_minimal() +
+    labs(x = input$x, y = input$y, color = "Win-Loss %")
+  
+})
+
+```
+
+
+**Commentary** The graph above is a coded scatter plot that allows the user to test the relationship between different variables in relation to W-L% percentage. This allows the user to see what aspects and stats of a team matter most to their W-L%. 
+
+Team Stats
+==========================
+
+```{r echo = FALSE}
+inputPanel(
+  selectInput("team", "Select a Team:",
+            choices = final_tibble$school,  
+            selected = final_tibble$school[1]),
+  sliderInput("size", label = "Point size",
+              min = 0.2, max = 5, value = 0.9, step = 0.1)
+  
+  #selectizeInput("school",  label = "Teams", choices = final_tibble$school, selected = final_tibble$school[1], multiple = TRUE, options = list(create = TRUE)) # default selection
+)
+```
+
+
+
+
+```{r, echo = FALSE}
+
+renderPlot({
+  req(input$team)  # Ensure a team is selected
+
+  # Define numeric variables to include
+  rescale_vars <- c("w_l_percent", "tm", "srs", "sos")
+
+  # Filter and normalize data
+  plot_data <- final_tibble %>%
+    filter(school == input$team) %>%
+    select(school, all_of(rescale_vars)) %>%
+    mutate(across(all_of(rescale_vars), ~ rescale(as.numeric(.), na.rm = TRUE))) %>%  #rescale makes the axes relatively the same so there is no skew in the graph
+    distinct()
+
+  # Handle case where data is empty or has NA
+  if (nrow(plot_data) == 0 || any(is.na(plot_data))) {. #There was so much googling involved for this
+    plot.new()
+    title("No data available for this team.")
+    return()
+  }
+
+  # Generate radar plot
+  ggradar::ggradar(
+    plot.data = plot_data,
+    font.radar = "roboto",
+    grid.label.size = 13,
+    axis.label.size = 8.5,
+    group.point.size = input$size
+  )
+})
+
+
+  
+
+
+```
+
+**Commentary** The graph above is a radar/spider graph that breaks down the average W-L Percentage, Points, Simple Ranking System score and Strength of schedule score over all years. These are important metrics since they provide qualitative ways to assess a team. We are also able to assess teams to see where their strengths and weaknesses lie and also test what may weigh in the SRS ranking of a team. 
+
+
